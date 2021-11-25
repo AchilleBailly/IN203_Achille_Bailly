@@ -9,3 +9,13 @@
 
 **Matvec**
 	Etonnemment, aucune des deux méthodes accélère réellement le code, même si le découpage par ligne parait plus naturel et éfficace
+
+# TP3
+**1 Produit scalaire**
+Changer le nombre de threads ne semble pas affecter la vitesse du produit scalaire.
+Pour la version avec std::thread, le plus rapide est avec 1 seul thread, le reste est environ 1.5 et 2 fois plus lent. 
+OpenMP reste plus rapide d'un facteur 2 par rapport std::thread.
+On est très certainement memory bound et de plus, la version std::thread est probablement trop lourde.
+
+**Produit Matrice-Matrice**
+Le produit entre 1023/1024 ou 1025/1024 est plus de 4 fois plus lent. Après explications, c'est un problème de mémoire cache, qui stock suivant un modulo de la taille des données. Comme la taille du cache est une puissance de 2, avec un tableau de taille puissance de 2, il stockera chaque block au même endroit et devra donc renvoyer en RAM à chaque fois.
