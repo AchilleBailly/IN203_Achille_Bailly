@@ -19,3 +19,10 @@ On est très certainement memory bound et de plus, la version std::thread est pr
 
 **Produit Matrice-Matrice**
 Le produit entre 1023/1024 ou 1025/1024 est plus de 4 fois plus lent. Après explications, c'est un problème de mémoire cache, qui stock suivant un modulo de la taille des données. Comme la taille du cache est une puissance de 2, avec un tableau de taille puissance de 2, il stockera chaque block au même endroit et devra donc renvoyer en RAM à chaque fois.
+
+
+# TP4
+**OpenMP et MPI**
+Voir Mandelbrot_openmp.cpp
+Le meilleur temps obtenu est de 0.27s environ avec 17 threads MPI (16 qui calculent réellement) et et nt = 30. Le temps original était de 6.5s soit une accélération de 24.
+
