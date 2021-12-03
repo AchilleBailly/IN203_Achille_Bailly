@@ -25,4 +25,11 @@ Le produit entre 1023/1024 ou 1025/1024 est plus de 4 fois plus lent. Après exp
 **OpenMP et MPI**
 Voir Mandelbrot_openmp.cpp
 Le meilleur temps obtenu est de 0.27s environ avec 17 threads MPI (16 qui calculent réellement) et et nt = 30. Le temps original était de 6.5s soit une accélération de 24.
+Avec TBB et en choisissant aussi nt=30, on obtient 5.3s, changer le nombre de threads et la taille des blocs ne semblent pas impacter grand chose.
+
+**RT avec TBB**
+Avec un static_partitionner(), le temps est à chaque fois de 1.58s.
+Avec auto_partitionner(), on peut descendre à 1.48s. 
+TBB fait bien un équilibrage car ce temps de 1.48s est très stable par rapport à un statict_partitionner() (qui ne fait pas d'équilibrage). 
+On n'arrive par ailleurs pas à descendre en dessous de ce nombre.
 
