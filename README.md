@@ -18,8 +18,18 @@ OpenMP reste plus rapide d'un facteur 2 par rapport std::thread.
 On est très certainement memory bound et de plus, la version std::thread est probablement trop lourde.
 
 **Produit Matrice-Matrice**
-Le produit entre 1023/1024 ou 1025/1024 est plus de 4 fois plus lent. Après explications, c'est un problème de mémoire cache, qui stock suivant un modulo de la taille des données. Comme la taille du cache est une puissance de 2, avec un tableau de taille puissance de 2, il stockera chaque block au même endroit et devra donc renvoyer en RAM à chaque fois.
+1) Le produit entre 1023/1024 ou 1025/1024 est plus de 4 fois plus lent. Après explications, c'est un problème de mémoire cache, qui stock suivant un modulo de la taille des données. Comme la taille du cache est une puissance de 2, avec un tableau de taille puissance de 2, il stockera chaque block au même endroit et devra donc renvoyer en RAM à chaque fois.
 
+2) Les matrices sont stockées par colonnes, en évitant de faire des sauts de mémoires non contigue, il faut donc que la boucle la plus imbriquée soit celle qui fasse les sauts de mémoire contigue
+
+3) 1 thread : 6.7s
+   2 threads : 3.9s
+   4 threads : 2.7s
+   8 threads : 2.6s
+   16 threads : 2.6s
+   L'accélération est clairement limitée, il est clair que la vitesse est limtée par les accés mémoires. 
+
+4) On pourrait faire le calcul par blocs, en effet, 
 
 # TP4
 **OpenMP et MPI**
