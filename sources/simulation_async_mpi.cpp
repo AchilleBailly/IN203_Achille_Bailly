@@ -13,6 +13,49 @@
 #include <random>
 #include <vector>
 
+void màjStatistique_bug(épidémie::Grille &grille,
+                        std::vector<épidémie::Individu> const &individus) {
+    auto [largeur, hauteur] = grille.dimension();
+    auto &statistiques = grille.getStatistiques();
+    std::vector<bool> seen(statistiques.size());
+
+    for (auto const &personne : individus) {
+        auto pos = personne.position();
+
+        std::size_t index = pos.x + pos.y * largeur;
+        if (!seen[index]) {
+            statistiques[index]
+                .nombre_contaminant_grippé_et_contaminé_par_agent = 0;
+            statistiques[index]
+                .nombre_contaminant_seulement_contaminé_par_agent = 0;
+            statistiques[index].nombre_contaminant_seulement_grippé = 0;
+            seen[index] = true;
+        }
+        if (personne.aGrippeContagieuse()) {
+            if (personne.aAgentPathogèneContagieux()) {
+                statistiques[index]
+                    .nombre_contaminant_grippé_et_contaminé_par_agent += 1;
+            } else {
+                statistiques[index].nombre_contaminant_seulement_grippé += 1;
+            }
+        } else {
+            if (personne.aAgentPathogèneContagieux()) {
+                statistiques[index]
+                    .nombre_contaminant_seulement_contaminé_par_agent += 1;
+            }
+        }
+    }
+    for (int i = 0; i < seen.size(); i++) {
+        if (!seen[i]) {
+            statistiques[i].nombre_contaminant_grippé_et_contaminé_par_agent =
+                0;
+            statistiques[i].nombre_contaminant_seulement_contaminé_par_agent =
+                0;
+            statistiques[i].nombre_contaminant_seulement_grippé = 0;
+        }
+    }
+}
+
 void màjStatistique(épidémie::Grille &grille,
                     std::vector<épidémie::Individu> const &individus) {
     for (auto &statistique : grille.getStatistiques()) {
@@ -88,13 +131,17 @@ void afficheSimulation(sdl2::window &écran, épidémie::Grille const &grille,
 }
 
 void simulation_process0(bool affiche) {
-    MPI_Comm globComm;
-    MPI_Comm_dup(MPI_COMM_WORLD, &globComm);
+    int nbp;
+    MPI_Comm_size(MPI_COMM_WORLD, &nbp);
+    MPI_Comm splitComm;
+    MPI_Comm_split(MPI_COMM_WORLD, 0, -1, &splitComm);
     MPI_Datatype MPI_StatParCase;
     MPI_Type_contiguous(3, MPI_INT, &MPI_StatParCase);
     MPI_Type_commit(&MPI_StatParCase);
 
     TimeMeasuring t0, t1, t5;
+
+    MPI_Request req;
 
     constexpr const unsigned int largeur_écran = 1280, hauteur_écran = 720;
     sdl2::window écran("Simulation épidémie de grippe",
@@ -104,40 +151,40 @@ void simulation_process0(bool affiche) {
     size_t jours_écoulés = 0;
     int dim_x, dim_y;
     MPI_Status status;
+    MPI_Recv(&dim_x, 1, MPI_INT, 1, 42, MPI_COMM_WORLD, &status);
+    MPI_Recv(&dim_y, 1, MPI_INT, 1, 42, MPI_COMM_WORLD, &status);
+    std::cout << dim_x << ", " << dim_y << "\n";
+    épidémie::Grille grille(dim_x * dim_y);
+    grille.m_statistiques.reserve(dim_x * dim_y);
 
     while (!quitting) {
-
-        auto events = queue.pull_events();
-        for (const auto &e : events) {
-            if (e->kind_of_event() == sdl2::event::quit) {
-                quitting = true;
-                MPI_Ssend(&quitting, 1, MPI_INT, 1, 10, globComm);
-            }
-        }
 
         t5.setStart();
         if (affiche) {
             t0.setStart();
-            if (jours_écoulés == 0) {
-                MPI_Recv(&dim_x, 1, MPI_INT, 1, 42, globComm, &status);
-                MPI_Recv(&dim_y, 1, MPI_INT, 1, 42, globComm, &status);
-            }
-            std::vector<épidémie::Grille::StatistiqueParCase> tmp(dim_x *
-                                                                  dim_y);
+            // fake send to say that we are ready to accept a message
+            MPI_Send(&jours_écoulés, 1, MPI_INT, 1, 41, MPI_COMM_WORLD);
 
-            MPI_Recv(tmp.data(), dim_x * dim_y, MPI_StatParCase, 1, 42,
-                     globComm, &status);
-            MPI_Recv(&jours_écoulés, 1, MPI_INT, 1, 42, globComm, &status);
+            MPI_Recv(&jours_écoulés, 1, MPI_INT, 1, 42, MPI_COMM_WORLD,
+                     &status);
+            MPI_Recv(grille.m_statistiques.data(), dim_x * dim_y,
+                     MPI_StatParCase, 1, 42, MPI_COMM_WORLD, &status);
             t0.setEnd();
-
-            épidémie::Grille grille(dim_x * dim_y);
-            grille.m_statistiques = tmp;
 
             t1.setStart();
             afficheSimulation(écran, grille, jours_écoulés);
             t1.setEnd();
         }
         t5.setEnd();
+
+        auto events = queue.pull_events();
+        for (const auto &e : events) {
+            if (e->kind_of_event() == sdl2::event::quit) {
+                quitting = true;
+                for (int i = 1; i < nbp; i++)
+                    MPI_Ssend(&quitting, 1, MPI_INT, i, 10, MPI_COMM_WORLD);
+            }
+        }
     }
 
     std::cout << "Itération du process d'affichage : "
@@ -148,8 +195,13 @@ void simulation_process0(bool affiche) {
 }
 
 void simulation_process1(bool affiche) {
-    MPI_Comm globComm;
-    MPI_Comm_dup(MPI_COMM_WORLD, &globComm);
+    int rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm splitComm;
+    MPI_Comm_split(MPI_COMM_WORLD, 1, rank - 1, &splitComm);
+    int nbp;
+    MPI_Comm_size(splitComm, &nbp);
+    MPI_Comm_rank(splitComm, &rank);
 
     // creating a new MPI data type for struct StatistiqueParCase
     MPI_Datatype MPI_StatParCase;
@@ -163,21 +215,30 @@ void simulation_process1(bool affiche) {
 
     épidémie::ContexteGlobal contexte;
     // contexte.déplacement_maximal = 1; <= Si on veut moins de brassage
-    contexte.taux_population = 100'000;
+    contexte.taux_population = 400'000;
     // contexte.taux_population = 1'000;
     contexte.interactions.β = 60.;
     std::vector<épidémie::Individu> population;
-    population.reserve(contexte.taux_population);
+    const int pop_per_process = contexte.taux_population / nbp;
+    population.reserve(pop_per_process);
     épidémie::Grille grille{contexte.taux_population};
+    épidémie::Grille grille_tot{contexte.taux_population};
 
     auto [largeur_grille, hauteur_grille] = grille.dimension();
+    if (rank == 0) {
+        MPI_Ssend(&largeur_grille, 1, MPI_INT, 0, 42, MPI_COMM_WORLD);
+        MPI_Ssend(&hauteur_grille, 1, MPI_INT, 0, 42, MPI_COMM_WORLD);
+    }
+
     // L'agent pathogène n'évolue pas et reste donc constant...
     épidémie::AgentPathogène agent(graine_aléatoire++);
 
     // Initialisation de la population initiale :
-    for (std::size_t i = 0; i < contexte.taux_population; ++i) {
+    for (int i = rank * pop_per_process; i < (rank + 1) * pop_per_process;
+         ++i) {
         std::default_random_engine motor(100 * (i + 1));
-        population.emplace_back(graine_aléatoire++, contexte.espérance_de_vie,
+        population.emplace_back(graine_aléatoire + i + 1,
+                                contexte.espérance_de_vie,
                                 contexte.déplacement_maximal);
         population.back().setPosition(largeur_grille, hauteur_grille);
         if (porteur_pathogène(motor) < 0.2) {
@@ -187,7 +248,13 @@ void simulation_process1(bool affiche) {
 
     std::size_t jours_écoulés = 0;
     int jour_apparition_grippe = 0;
-    int nombre_immunisés_grippe = (contexte.taux_population * 23) / 100;
+    int nombre_immunisés_grippe_tot = (contexte.taux_population * 23) / 100;
+    int nombre_immunisés_grippe = 0;
+    if ((rank + 1) * pop_per_process <= nombre_immunisés_grippe_tot)
+        nombre_immunisés_grippe = pop_per_process;
+    else if (rank * pop_per_process <= nombre_immunisés_grippe_tot)
+        nombre_immunisés_grippe = nombre_immunisés_grippe_tot % pop_per_process;
+    std::cout << rank << ", " << nombre_immunisés_grippe << "\n";
 
     bool quitting = false;
 
@@ -200,9 +267,9 @@ void simulation_process1(bool affiche) {
 
     std::cout << "Début boucle épidémie" << std::endl << std::flush;
     MPI_Request req = MPI_REQUEST_NULL;
+    MPI_Status status;
+    int flag = true;
     while (!quitting) {
-        MPI_Irecv(&quitting, 1, MPI_INT, 0, 10, globComm, &req);
-
         t0.setStart();
         if (jours_écoulés % 365 == 0) // Si le premier Octobre (début de
                                       // l'année pour l'épidémie ;-) )
@@ -217,17 +284,35 @@ void simulation_process1(bool affiche) {
                 population[ipersonne].devientImmuniséGrippe();
             }
             for (int ipersonne = nombre_immunisés_grippe;
-                 ipersonne < int(contexte.taux_population); ++ipersonne) {
+                 ipersonne < int(pop_per_process); ++ipersonne) {
                 population[ipersonne].redevientSensibleGrippe();
             }
             t1.setEnd();
         }
 
-        if (jours_écoulés % 365 == std::size_t(jour_apparition_grippe)) {
+        if (jours_écoulés % 365 == std::size_t(jour_apparition_grippe) &&
+            nombre_immunisés_grippe < pop_per_process &&
+            nombre_immunisés_grippe != 0) {
             t2.setStart();
-            for (int ipersonne = nombre_immunisés_grippe;
-                 ipersonne < nombre_immunisés_grippe + 25; ++ipersonne) {
-                population[ipersonne].estContaminé(grippe);
+            if (nombre_immunisés_grippe + 25 <= pop_per_process) {
+                for (int ipersonne = nombre_immunisés_grippe;
+                     ipersonne < nombre_immunisés_grippe + 25; ++ipersonne) {
+                    population[ipersonne].estContaminé(grippe);
+                }
+            } else if (nombre_immunisés_grippe != 0) {
+                for (int ipersonne = nombre_immunisés_grippe;
+                     ipersonne < pop_per_process; ++ipersonne) {
+                    population[ipersonne].estContaminé(grippe);
+                }
+            } else if ((rank - 1) * pop_per_process <=
+                       nombre_immunisés_grippe_tot) {
+                int to_contaminate =
+                    25 - (pop_per_process -
+                          nombre_immunisés_grippe_tot % pop_per_process);
+                for (int ipersonne = 0; ipersonne < to_contaminate;
+                     ++ipersonne) {
+                    population[ipersonne].estContaminé(grippe);
+                }
             }
             t2.setEnd();
         }
@@ -235,6 +320,20 @@ void simulation_process1(bool affiche) {
         // Mise à jour des statistiques pour les cases de la grille :
         t3.setStart();
         màjStatistique(grille, population);
+
+        // MPI_Ibcast(&quitting, 1, MPI_INT, 0, MPI_COMM_WORLD, &req);
+        // if (quitting)
+        //     break;
+        MPI_Allreduce(
+            grille.m_statistiques.data(), grille_tot.m_statistiques.data(),
+            3 * largeur_grille * hauteur_grille, MPI_INT, MPI_SUM, splitComm);
+
+        MPI_Irecv(&quitting, 1, MPI_INT, 0, 10, MPI_COMM_WORLD, &req);
+        if (quitting)
+            break;
+
+        grille = grille_tot;
+        // sommer entre les porocessus
         t3.setEnd();
         // On parcout la population pour voir qui est contaminé et qui
         // ne l'est pas, d'abord pour la grippe puis pour l'agent
@@ -275,41 +374,48 @@ void simulation_process1(bool affiche) {
                   << grille.nombreTotalContaminésAgentPathogène() <<
            std::endl;*/
 
-        output << jours_écoulés << "\t" << grille.nombreTotalContaminésGrippe()
-               << "\t" << grille.nombreTotalContaminésAgentPathogène()
-               << std::endl;
+        if (rank == 0) {
+            output << jours_écoulés << "\t"
+                   << grille.nombreTotalContaminésGrippe() << "\t"
+                   << grille.nombreTotalContaminésAgentPathogène() << std::endl;
+        }
         jours_écoulés += 1;
+
         t0.setEnd();
 
         t5.setStart();
-        if (affiche) {
-            auto [dim_x, dim_y] = grille.dimension();
-            if (jours_écoulés == 1) {
-                MPI_Ssend(&dim_x, 1, MPI_INT, 0, 42, globComm);
-                MPI_Ssend(&dim_y, 1, MPI_INT, 0, 42, globComm);
+        if (affiche && rank == 0) {
+            MPI_Iprobe(0, 41, MPI_COMM_WORLD, &flag, &status);
+            if (flag) {
+                int dump;
+                MPI_Recv(&dump, 1, MPI_INT, 0, 41, MPI_COMM_WORLD, &status);
+                MPI_Send(&jours_écoulés, 1, MPI_INT, 0, 42, MPI_COMM_WORLD);
+                MPI_Send(grille_tot.m_statistiques.data(),
+                         largeur_grille * hauteur_grille, MPI_StatParCase, 0,
+                         42, MPI_COMM_WORLD);
             }
-            MPI_Ssend(grille.m_statistiques.data(), dim_x * dim_y,
-                      MPI_StatParCase, 0, 42, globComm);
-            MPI_Ssend(&jours_écoulés, 1, MPI_INT, 0, 42, globComm);
         }
+
         t5.setEnd();
     }
 
     output.close();
 
     // Fin boucle temporelle
-    std::cout << "Itération du process de simu : "
-              << t0.getAverageDuration().count() << "\n";
-    std::cout << "Premier jour de l'année : " << t1.getAverageDuration().count()
-              << "\n";
-    std::cout << "Premier jour de grippe : " << t2.getAverageDuration().count()
-              << "\n";
-    std::cout << "Calcul des stats de la grille : "
-              << t3.getAverageDuration().count() << "\n";
-    std::cout << "Mise a jour de la grille : "
-              << t4.getAverageDuration().count() << "\n";
-    std::cout << "Envoi des données au process 0 : "
-              << t5.getAverageDuration().count() << "\n";
+    if (rank == 0) {
+        std::cout << "Itération du process de simu : "
+                  << t0.getAverageDuration().count() << "\n";
+        std::cout << "Premier jour de l'année : "
+                  << t1.getAverageDuration().count() << "\n";
+        std::cout << "Premier jour de grippe : "
+                  << t2.getAverageDuration().count() << "\n";
+        std::cout << "Calcul des stats de la grille : "
+                  << t3.getAverageDuration().count() << "\n";
+        std::cout << "Mise a jour de la grille : "
+                  << t4.getAverageDuration().count() << "\n";
+        std::cout << "Envoi des données au process 0 : "
+                  << t5.getAverageDuration().count() << "\n";
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -326,8 +432,8 @@ int main(int argc, char *argv[]) {
     MPI_Comm_dup(MPI_COMM_WORLD, &globComm);
     int nbp;
     MPI_Comm_size(globComm, &nbp);
-    if (nbp != 2) {
-        std::cerr << "Choose exactly 2 processes.\n";
+    if (nbp < 2) {
+        std::cerr << "Choose more than 2 processes.\n";
         exit(-1);
     }
     int rank;

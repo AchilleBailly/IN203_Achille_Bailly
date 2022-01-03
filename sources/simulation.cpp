@@ -84,7 +84,7 @@ void afficheSimulation(sdl2::window &écran, épidémie::Grille const &grille,
 
 void simulation(bool affiche) {
 
-    constexpr const unsigned int largeur_écran = 1280, hauteur_écran = 1024;
+    constexpr const unsigned int largeur_écran = 1280, hauteur_écran = 720;
     sdl2::window écran("Simulation épidémie de grippe",
                        {largeur_écran, hauteur_écran});
 
@@ -93,7 +93,7 @@ void simulation(bool affiche) {
 
     épidémie::ContexteGlobal contexte;
     // contexte.déplacement_maximal = 1; <= Si on veut moins de brassage
-    // contexte.taux_population = 400'000;
+    contexte.taux_population = 100'000;
     // contexte.taux_population = 1'000;
     contexte.interactions.β = 60.;
     std::vector<épidémie::Individu> population;
@@ -139,10 +139,10 @@ void simulation(bool affiche) {
         }
 
         t0.setStart();
-        t1.setStart();
         if (jours_écoulés % 365 ==
             0) // Si le premier Octobre (début de l'année pour l'épidémie ;-) )
         {
+            t1.setStart();
             grippe = épidémie::Grippe(jours_écoulés / 365);
             jour_apparition_grippe = grippe.dateCalculImportationGrippe();
             grippe.calculNouveauTauxTransmission();
@@ -155,17 +155,17 @@ void simulation(bool affiche) {
                  ipersonne < int(contexte.taux_population); ++ipersonne) {
                 population[ipersonne].redevientSensibleGrippe();
             }
+            t1.setEnd();
         }
-        t1.setEnd();
 
-        t2.setStart();
         if (jours_écoulés % 365 == std::size_t(jour_apparition_grippe)) {
+            t2.setStart();
             for (int ipersonne = nombre_immunisés_grippe;
                  ipersonne < nombre_immunisés_grippe + 25; ++ipersonne) {
                 population[ipersonne].estContaminé(grippe);
             }
+            t2.setEnd();
         }
-        t2.setEnd();
 
         // Mise à jour des statistiques pour les cases de la grille :
         t3.setStart();

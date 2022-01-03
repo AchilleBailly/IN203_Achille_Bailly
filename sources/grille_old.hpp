@@ -4,14 +4,15 @@
 #include <array>
 #include <cstdint>
 
+struct StatistiqueParCase {
+    int nombre_contaminant_seulement_grippé;
+    int nombre_contaminant_seulement_contaminé_par_agent;
+    int nombre_contaminant_grippé_et_contaminé_par_agent;
+};
+
 namespace épidémie {
 class Grille {
   public:
-    struct StatistiqueParCase {
-        int nombre_contaminant_seulement_grippé;
-        int nombre_contaminant_seulement_contaminé_par_agent;
-        int nombre_contaminant_grippé_et_contaminé_par_agent;
-    };
     // Taille de la grille dépend de la taille de la population
     Grille(std::size_t population);
 

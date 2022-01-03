@@ -1,7 +1,3 @@
-#include Make_linux.inc
-#include Make_msys2.inc
-include Make_osx.inc
-
 CXXFLAGS = -std=c++17 `sdl2-config --cflags`
 ifdef DEBUG
 CXXFLAGS += -g -O0 -Wall -fbounds-check -pedantic -D_GLIBCXX_DEBUG -DDEBUG
@@ -10,16 +6,17 @@ CXXFLAGS += -O3 -march=native -Wall
 endif
 
 ifdef MPI
-CXX = mpic++
-CXXFLAGS += -oversubscribe -openmp
-LIB += -lmpi 
+CXX = g++-11
+CXXFLAGS += -oversubscribe -fopenmp
+LIB += -lmpi -I/usr/local/Cellar/open-mpi/4.1.1_2/include/
 else
+CXX = g++
 CXXFLAGS += -fopenmp
 endif
 
 
-LIBS = $(LIB) `sdl2-config --cflags` -lSDL2_ttf -lSDL2_image  `sdl2-config --libs` 
-ALL= simulation_async_omp_sarah.exe
+LIBS = $(LIB) `sdl2-config --cflags` -lSDL2_ttf -lSDL2_image  `sdl2-config --libs` -lpthread -lomp
+ALL= simulation.exe simulation_sync_affiche_mpi.exe simulation_async_affiche_mpi.exe simulation_async_mpi.exe simulation_async_omp.exe
 
 default:	help
 
@@ -57,8 +54,11 @@ graphisme/src/SDL2/formated_texte.o : graphisme/src/SDL2/window.hpp graphisme/sr
 graphisme/src/SDL2/image.o : graphisme/src/SDL2/window.hpp graphisme/src/SDL2/image.hpp graphisme/src/SDL2/image.cpp
 	$(CXX) $(CXXFLAGS) -c graphisme/src/SDL2/image.cpp -o graphisme/src/SDL2/image.o
 
-simulation_async_omp_sarah.exe:	$(OBJS) simulation_async_omp_sarah.cpp
-	$(CXX) $(CXXFLAGS) $(OBJS) simulation_async_omp_sarah.cpp -o simulation_async_omp_sarah.exe $(LIBS)
+simulation.exe:	$(OBJS) simulation.cpp
+	$(CXX) $(CXXFLAGS) $(OBJS) simulation.cpp -o simulation.exe $(LIBS)
+
+simulation_sync_affiche_mpi.exe: $(OBJS) simulation_sync_affiche_mpi.cpp
+	$(CXX) $(CXXFLAGS) $(OBJS) simulation_sync_affiche_mpi.cpp -o simulation_sync_affiche_mpi.exe $(LIBS)
 
 %.exe : %.cpp
 	make $(OBJS)
@@ -68,6 +68,7 @@ help:
 	@echo "Available targets : "
 	@echo "    all            : compile the executable"
 	@echo "    sdl2_documentation.exe     : compile the executable"
+	@echo "Add MPI=yes to compile MPI project"
 	@echo "Add DEBUG=yes to compile in debug"
 	@echo "Configuration :"
 	@echo "    CXX      :    $(CXX)"

@@ -115,7 +115,7 @@ bool épidémie::Individu::testContaminationGrippe(
     Grille const &grille, Interactions const &t_interactions, Grippe &grippe,
     AgentPathogène &agent) {
     auto [largeur, hauteur] = grille.dimension();
-    StatistiqueParCase const &statistiques =
+    épidémie::Grille::StatistiqueParCase const &statistiques =
         grille.getStatistiques()[m_position.x + m_position.y * largeur];
 
     // Test infection par la grippe avec interaction avec l'agent pathogène
@@ -152,7 +152,7 @@ bool épidémie::Individu::testContaminationAgent(Grille const &grille,
     if (this->m_agent_pathogène.temps_contagieux > 0)
         return false;
     auto [largeur, hauteur] = grille.dimension();
-    StatistiqueParCase const &statistiques =
+    épidémie::Grille::StatistiqueParCase const &statistiques =
         grille.getStatistiques()[m_position.x + m_position.y * largeur];
 
     for (int i = 0;

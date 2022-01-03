@@ -104,30 +104,24 @@ void simulation_process0(bool affiche) {
     size_t jours_écoulés = 0;
     int dim_x, dim_y;
     MPI_Status status;
+    MPI_Recv(&dim_x, 1, MPI_INT, 1, 42, globComm, &status);
+    MPI_Recv(&dim_y, 1, MPI_INT, 1, 42, globComm, &status);
+    std::cout << dim_x << ", " << dim_y << "\n";
 
     while (!quitting) {
-
-        auto events = queue.pull_events();
-        for (const auto &e : events) {
-            if (e->kind_of_event() == sdl2::event::quit) {
-                quitting = true;
-                MPI_Ssend(&quitting, 1, MPI_INT, 1, 10, globComm);
-            }
-        }
 
         t5.setStart();
         if (affiche) {
             t0.setStart();
-            if (jours_écoulés == 0) {
-                MPI_Recv(&dim_x, 1, MPI_INT, 1, 42, globComm, &status);
-                MPI_Recv(&dim_y, 1, MPI_INT, 1, 42, globComm, &status);
-            }
             std::vector<épidémie::Grille::StatistiqueParCase> tmp(dim_x *
                                                                   dim_y);
+            // fake send to say that we are ready to accept a message
+            MPI_Send(&jours_écoulés, 1, MPI_INT, 1, 41, MPI_COMM_WORLD);
 
+            MPI_Recv(&jours_écoulés, 1, MPI_INT, 1, 42, MPI_COMM_WORLD,
+                     &status);
             MPI_Recv(tmp.data(), dim_x * dim_y, MPI_StatParCase, 1, 42,
-                     globComm, &status);
-            MPI_Recv(&jours_écoulés, 1, MPI_INT, 1, 42, globComm, &status);
+                     MPI_COMM_WORLD, &status);
             t0.setEnd();
 
             épidémie::Grille grille(dim_x * dim_y);
@@ -138,6 +132,14 @@ void simulation_process0(bool affiche) {
             t1.setEnd();
         }
         t5.setEnd();
+
+        auto events = queue.pull_events();
+        for (const auto &e : events) {
+            if (e->kind_of_event() == sdl2::event::quit) {
+                quitting = true;
+                MPI_Ssend(&quitting, 1, MPI_INT, 1, 10, globComm);
+            }
+        }
     }
 
     std::cout << "Itération du process d'affichage : "
@@ -171,6 +173,9 @@ void simulation_process1(bool affiche) {
     épidémie::Grille grille{contexte.taux_population};
 
     auto [largeur_grille, hauteur_grille] = grille.dimension();
+    MPI_Ssend(&largeur_grille, 1, MPI_INT, 0, 42, globComm);
+    MPI_Ssend(&hauteur_grille, 1, MPI_INT, 0, 42, globComm);
+
     // L'agent pathogène n'évolue pas et reste donc constant...
     épidémie::AgentPathogène agent(graine_aléatoire++);
 
@@ -200,6 +205,8 @@ void simulation_process1(bool affiche) {
 
     std::cout << "Début boucle épidémie" << std::endl << std::flush;
     MPI_Request req = MPI_REQUEST_NULL;
+    MPI_Status status;
+    int flag = true;
     while (!quitting) {
         MPI_Irecv(&quitting, 1, MPI_INT, 0, 10, globComm, &req);
 
@@ -241,6 +248,7 @@ void simulation_process1(bool affiche) {
         // pathogène
         std::size_t compteur_grippe = 0, compteur_agent = 0, mouru = 0;
         t4.setStart();
+
         for (auto &personne : population) {
             if (personne.testContaminationGrippe(grille, contexte.interactions,
                                                  grippe, agent)) {
@@ -283,14 +291,15 @@ void simulation_process1(bool affiche) {
 
         t5.setStart();
         if (affiche) {
-            auto [dim_x, dim_y] = grille.dimension();
-            if (jours_écoulés == 1) {
-                MPI_Ssend(&dim_x, 1, MPI_INT, 0, 42, globComm);
-                MPI_Ssend(&dim_y, 1, MPI_INT, 0, 42, globComm);
+            MPI_Iprobe(0, 41, MPI_COMM_WORLD, &flag, &status);
+            if (flag) {
+                int dump;
+                MPI_Recv(&dump, 1, MPI_INT, 0, 41, MPI_COMM_WORLD, &status);
+                MPI_Send(&jours_écoulés, 1, MPI_INT, 0, 42, MPI_COMM_WORLD);
+                MPI_Send(grille.m_statistiques.data(),
+                         largeur_grille * hauteur_grille, MPI_StatParCase, 0,
+                         42, MPI_COMM_WORLD);
             }
-            MPI_Ssend(grille.m_statistiques.data(), dim_x * dim_y,
-                      MPI_StatParCase, 0, 42, globComm);
-            MPI_Ssend(&jours_écoulés, 1, MPI_INT, 0, 42, globComm);
         }
         t5.setEnd();
     }
