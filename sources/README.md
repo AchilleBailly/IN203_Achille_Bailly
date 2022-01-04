@@ -5,15 +5,15 @@ On voit ainsi que c'est l'affichage qui prend la majorité du temps de boucle, l
 On voit ici une nette dégradation des performances, environ 6 fois plus lent sur la mise à jour de la grille compilé avec g++ et 1.5 fois plus lent compilé avec MPI. Cependant, compilé avec MPI, une itération entière prend plus ou moins le même temps, le fait d'afficher avec un processus différent et que la transmission soit rapide rattrape le temps perdu sur la mise à jour de la grille. 
 
 **2.3**
-Itération du process de simu : 0.201068
-Premier jour de l'année : 0.0196799
-Premier jour de grippe : 2.1553e-05
-Calcul des stats de la grille : 0.00985157
-Mise a jour de la grille : 0.186356
-Envoi des données au process 0 : 0.00280543
-Itération du process d'affichage : 0.202634
-Affichage : 0.0615294
-Réception des données : 0.13537
+Itération du process de simu : 0.201068\n
+Premier jour de l'année : 0.0196799\n
+Premier jour de grippe : 2.1553e-05\n
+Calcul des stats de la grille : 0.00985157\n
+Mise a jour de la grille : 0.186356\n
+Envoi des données au process 0 : 0.00280543\n
+Itération du process d'affichage : 0.202634\n
+Affichage : 0.0615294\n
+Réception des données : 0.13537\n
 
 
 **400'000 individus**
