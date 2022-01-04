@@ -51,6 +51,8 @@ class Individu {
     void estContaminé(Grippe &grippe);
     void estContaminé(AgentPathogène &agent);
 
+    std::default_random_engine m_moteur_stochastique;
+
   private:
     struct {
         Sensibilité sensibilité = Sensibilité::Sensible;
@@ -65,7 +67,6 @@ class Individu {
     } m_agent_pathogène;
     int m_âge, m_espérance_de_vie;
     Position m_position;
-    std::default_random_engine m_moteur_stochastique;
     std::uniform_int_distribution<int> m_générateur_quantité_déplacement;
     std::uniform_int_distribution<int> m_générateur_déplacement;
     std::uniform_real_distribution<double> m_générateur_maladie;

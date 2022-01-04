@@ -165,7 +165,7 @@ void simulation_process1(bool affiche) {
 
     épidémie::ContexteGlobal contexte;
     // contexte.déplacement_maximal = 1; <= Si on veut moins de brassage
-    contexte.taux_population = 100'000;
+    contexte.taux_population = 400'000;
     // contexte.taux_population = 1'000;
     contexte.interactions.β = 60.;
     std::vector<épidémie::Individu> population;
@@ -287,7 +287,6 @@ void simulation_process1(bool affiche) {
                << "\t" << grille.nombreTotalContaminésAgentPathogène()
                << std::endl;
         jours_écoulés += 1;
-        t0.setEnd();
 
         t5.setStart();
         if (affiche) {
@@ -302,6 +301,7 @@ void simulation_process1(bool affiche) {
             }
         }
         t5.setEnd();
+        t0.setEnd();
     }
 
     output.close();

@@ -4,6 +4,8 @@
 
 typedef std::chrono::steady_clock chr;
 
+// Une classe pour avoir des moyennes de temps sur différentes parties du code
+// dans une boucle.
 class TimeMeasuring {
     chr::time_point start, end;
     std::chrono::duration<double> totalDuration;

@@ -59,7 +59,7 @@ void màjStatistique_bug(épidémie::Grille &grille,
 
 void màjStatistique(épidémie::Grille &grille,
                     std::vector<épidémie::Individu> const &individus) {
-#pragma omp parallel for shared(statistiques)
+#pragma omp parallel for shared(statistiques) num_threads(1)
     for (auto &statistique : grille.getStatistiques()) {
         statistique.nombre_contaminant_grippé_et_contaminé_par_agent = 0;
         statistique.nombre_contaminant_seulement_contaminé_par_agent = 0;
@@ -68,7 +68,7 @@ void màjStatistique(épidémie::Grille &grille,
     auto [largeur, hauteur] = grille.dimension();
     auto &statistiques = grille.getStatistiques();
 
-#pragma omp parallel for shared(statistiques)
+#pragma omp parallel for shared(statistiques) num_threads(1)
     for (auto const &personne : individus) {
         auto pos = personne.position();
 
@@ -157,7 +157,7 @@ void simulation_process0(bool affiche) {
 
     while (!quitting) {
 
-                t5.setStart();
+        t5.setStart();
         if (affiche) {
             t0.setStart();
             std::vector<épidémie::Grille::StatistiqueParCase> tmp(dim_x *
@@ -298,7 +298,7 @@ void simulation_process1(bool affiche) {
         std::size_t compteur_grippe = 0, compteur_agent = 0, mouru = 0;
         t4.setStart();
 
-#pragma omp parallel for reduction(+ : compteur_grippe, compteur_agent, mouru) num_threads(16)
+#pragma omp parallel for reduction(+ : compteur_grippe, compteur_agent, mouru) num_threads(1)
         for (auto &personne : population) {
 
             if (personne.testContaminationGrippe(grille, contexte.interactions,
@@ -337,7 +337,6 @@ void simulation_process1(bool affiche) {
                << "\t" << grille.nombreTotalContaminésAgentPathogène()
                << std::endl;
         jours_écoulés += 1;
-        t0.setEnd();
 
         t5.setStart();
         if (affiche) {
@@ -352,6 +351,7 @@ void simulation_process1(bool affiche) {
             }
         }
         t5.setEnd();
+        t0.setEnd();
     }
 
     output.close();

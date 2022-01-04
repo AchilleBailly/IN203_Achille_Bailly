@@ -18,8 +18,8 @@ CXXFLAGS += -fopenmp
 endif
 
 
-LIBS = $(LIB) `sdl2-config --cflags` -lSDL2_ttf -lSDL2_image  `sdl2-config --libs` 
-ALL= simulation_async_omp_sarah.exe
+LIBS = $(LIB) `sdl2-config --cflags` -lSDL2_ttf -lSDL2_image  `sdl2-config --libs`
+ALL= simulation_async_omp.exe simulation.exe simulation_async_affiche_mpi.exe simulation_async_mpi.exe simulation_async_mpi_omp.exe simulation_sync_affiche_mpi.exe
 
 default:	help
 

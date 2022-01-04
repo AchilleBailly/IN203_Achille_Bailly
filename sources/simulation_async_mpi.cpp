@@ -215,7 +215,7 @@ void simulation_process1(bool affiche) {
 
     épidémie::ContexteGlobal contexte;
     // contexte.déplacement_maximal = 1; <= Si on veut moins de brassage
-    contexte.taux_population = 400'000;
+    contexte.taux_population = nbp * 100'000;
     // contexte.taux_population = 1'000;
     contexte.interactions.β = 60.;
     std::vector<épidémie::Individu> population;
@@ -234,11 +234,12 @@ void simulation_process1(bool affiche) {
     épidémie::AgentPathogène agent(graine_aléatoire++);
 
     // Initialisation de la population initiale :
+    // bien faire attention à donner la même graine suivant le rang du processus
+    // que si on était en séquentiel
     for (int i = rank * pop_per_process; i < (rank + 1) * pop_per_process;
          ++i) {
         std::default_random_engine motor(100 * (i + 1));
-        population.emplace_back(graine_aléatoire + i + 1,
-                                contexte.espérance_de_vie,
+        population.emplace_back(graine_aléatoire + i, contexte.espérance_de_vie,
                                 contexte.déplacement_maximal);
         population.back().setPosition(largeur_grille, hauteur_grille);
         if (porteur_pathogène(motor) < 0.2) {
@@ -250,11 +251,13 @@ void simulation_process1(bool affiche) {
     int jour_apparition_grippe = 0;
     int nombre_immunisés_grippe_tot = (contexte.taux_population * 23) / 100;
     int nombre_immunisés_grippe = 0;
+    // encore une fois, comme on a choisi de répartir la population
+    // séquentillement
+    // et pas en "round robin", certains processus n'ont pas d'immunisés
     if ((rank + 1) * pop_per_process <= nombre_immunisés_grippe_tot)
         nombre_immunisés_grippe = pop_per_process;
     else if (rank * pop_per_process <= nombre_immunisés_grippe_tot)
         nombre_immunisés_grippe = nombre_immunisés_grippe_tot % pop_per_process;
-    std::cout << rank << ", " << nombre_immunisés_grippe << "\n";
 
     bool quitting = false;
 
@@ -291,10 +294,12 @@ void simulation_process1(bool affiche) {
         }
 
         if (jours_écoulés % 365 == std::size_t(jour_apparition_grippe) &&
-            nombre_immunisés_grippe < pop_per_process &&
-            nombre_immunisés_grippe != 0) {
+            nombre_immunisés_grippe < pop_per_process) {
+            // rebelotte, les 25 contaminés initiaux ne sont pas dans chaque
+            // processus ...
             t2.setStart();
-            if (nombre_immunisés_grippe + 25 <= pop_per_process) {
+            if (nombre_immunisés_grippe + 25 <= pop_per_process &&
+                nombre_immunisés_grippe != 0) {
                 for (int ipersonne = nombre_immunisés_grippe;
                      ipersonne < nombre_immunisés_grippe + 25; ++ipersonne) {
                     population[ipersonne].estContaminé(grippe);
@@ -321,19 +326,19 @@ void simulation_process1(bool affiche) {
         t3.setStart();
         màjStatistique(grille, population);
 
-        // MPI_Ibcast(&quitting, 1, MPI_INT, 0, MPI_COMM_WORLD, &req);
-        // if (quitting)
-        //     break;
+        // on additionne les grilles "partielles" de chaque processus
+        // pour que chacun ait la grille entière
         MPI_Allreduce(
             grille.m_statistiques.data(), grille_tot.m_statistiques.data(),
             3 * largeur_grille * hauteur_grille, MPI_INT, MPI_SUM, splitComm);
+        grille = grille_tot;
 
+        // pour tuer chaque proc quand l'affichage le dit (ne fonctionne pas
+        // bien)
         MPI_Irecv(&quitting, 1, MPI_INT, 0, 10, MPI_COMM_WORLD, &req);
         if (quitting)
             break;
 
-        grille = grille_tot;
-        // sommer entre les porocessus
         t3.setEnd();
         // On parcout la population pour voir qui est contaminé et qui
         // ne l'est pas, d'abord pour la grippe puis pour l'agent
@@ -341,6 +346,8 @@ void simulation_process1(bool affiche) {
         std::size_t compteur_grippe = 0, compteur_agent = 0, mouru = 0;
         t4.setStart();
         for (auto &personne : population) {
+            if (omp_get_num_threads() == 16)
+                std::cout << "OpenMP working !!\n";
             if (personne.testContaminationGrippe(grille, contexte.interactions,
                                                  grippe, agent)) {
                 compteur_grippe++;
@@ -385,6 +392,7 @@ void simulation_process1(bool affiche) {
 
         t5.setStart();
         if (affiche && rank == 0) {
+            // comme avant, on envoit seulement si l'autre est prêt à recevoir
             MPI_Iprobe(0, 41, MPI_COMM_WORLD, &flag, &status);
             if (flag) {
                 int dump;
